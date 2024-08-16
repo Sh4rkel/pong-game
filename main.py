@@ -70,6 +70,18 @@ score1 = 0
 score2 = 0
 font = pygame.font.Font(None, 74)
 
+def save_final_score(player1_score, player2_score):
+    with open('scores.csv', mode='a', newline='') as file:
+        writer = csv.writer(file)
+        writer.writerow([player1_score, player2_score])
+
+def check_game_end():
+    global score1, score2
+    if score1 >= 10 or score2 >= 10:
+        save_final_score(score1, score2)
+        return True
+    return False
+
 def update_score():
     global score1, score2
     if ball.rect.left <= 0:
@@ -77,13 +89,14 @@ def update_score():
         ball.rect.center = (WIDTH // 2, HEIGHT // 2)
         ball.reset_speed()
         ball.speed_x = -ball.speed_x
-        save_score(score1, score2)
     if ball.rect.right >= WIDTH:
         score1 += 1
         ball.rect.center = (WIDTH // 2, HEIGHT // 2)
         ball.reset_speed()
         ball.speed_x = -ball.speed_x
-        save_score(score1, score2)
+    if check_game_end():
+        return True
+    return False
 
 def render_score():
     score_text1 = font.render(str(score1), True, WHITE)
@@ -112,17 +125,33 @@ def load_scores():
         pass
     return scores
 
+def draw_back_to_menu_button():
+    back_font = pygame.font.Font(None, 50)
+    back_text = back_font.render("Back to Menu", True, WHITE)
+    back_rect = back_text.get_rect(center=(WIDTH // 2, HEIGHT - 50))
+    screen.blit(back_text, back_rect)
+    return back_rect
+
 def show_history():
     scores = load_scores()
     screen.fill(BLACK)
     history_font = pygame.font.Font(None, 50)
     y_offset = 100
     for score in scores:
-        score_text = history_font.render(f"Player 1: {score[0]} - Player 2: {score[1]}", True, WHITE)
+        score_text = history_font.render(f"Player 1: {score[0]}(10) - Player 2: {score[1]}(10)", True, WHITE)
         screen.blit(score_text, (WIDTH // 2 - score_text.get_width() // 2, y_offset))
         y_offset += 50
+    back_rect = draw_back_to_menu_button()
     pygame.display.flip()
-    pygame.time.wait(5000)
+
+    while True:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                if back_rect.collidepoint(event.pos):
+                    return
 
 def start_screen():
     screen.fill(BLACK)
@@ -155,6 +184,12 @@ def start_screen():
                     return "PVA"
                 if history_rect.collidepoint(event.pos):
                     show_history()
+                    screen.fill(BLACK)
+                    screen.blit(title_text, (WIDTH // 2 - title_text.get_width() // 2, HEIGHT // 4))
+                    screen.blit(pvp_text, pvp_rect)
+                    screen.blit(pva_text, pva_rect)
+                    screen.blit(history_text, history_rect)
+                    pygame.display.flip()
 
 game_mode = start_screen()
 
@@ -179,7 +214,8 @@ while True:
 
     ball.move()
     ball.check_collision(paddle1, paddle2)
-    update_score()
+    if update_score():
+        game_mode = start_screen()
 
     screen.fill(BLACK)
     paddle1.draw(screen)
