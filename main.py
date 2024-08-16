@@ -1,7 +1,7 @@
 import csv
 import pygame
 import sys
-
+import random
 pygame.init()
 
 WIDTH, HEIGHT = 800, 600
@@ -10,6 +10,20 @@ pygame.display.set_caption("Pong Game")
 
 WHITE = (255, 255, 255)
 BLACK = (0, 0, 0)
+
+
+class PowerUp:
+    def __init__(self, x, y, type):
+        self.rect = pygame.Rect(x, y, 20, 20)
+        self.type = type
+        self.active = True
+
+    def draw(self, screen):
+        if self.type == "slow":
+            color = (0, 255, 0)  # Green for slow
+        elif self.type == "clone":
+            color = (255, 0, 0)  # Red for clone
+        pygame.draw.rect(screen, color, self.rect)
 
 class Paddle:
     def __init__(self, x, y):
@@ -83,21 +97,22 @@ def check_game_end():
     return False
 
 def update_score():
-    global score1, score2
+    global score1, score2, power_ups
     if ball.rect.left <= 0:
         score2 += 1
         ball.rect.center = (WIDTH // 2, HEIGHT // 2)
         ball.reset_speed()
         ball.speed_x = -ball.speed_x
+        power_ups = []
     if ball.rect.right >= WIDTH:
         score1 += 1
         ball.rect.center = (WIDTH // 2, HEIGHT // 2)
         ball.reset_speed()
         ball.speed_x = -ball.speed_x
+        power_ups = []
     if check_game_end():
         return True
     return False
-
 def render_score():
     score_text1 = font.render(str(score1), True, WHITE)
     score_text2 = font.render(str(score2), True, WHITE)
@@ -191,13 +206,52 @@ def start_screen():
                     screen.blit(history_text, history_rect)
                     pygame.display.flip()
 
+power_ups = []
+
+def initialize_power_ups():
+    for _ in range(random.randint(2, 3)):
+        x = random.randint(50, WIDTH - 50)
+        y = random.randint(50, HEIGHT - 50)
+        type = random.choice(["slow", "clone"])
+        power_ups.append(PowerUp(x, y, type))
+
+def generate_power_up():
+    if random.randint(1, 100) <= 5:  # 5% chance to generate a power-up
+        x = random.randint(50, WIDTH - 50)
+        y = random.randint(50, HEIGHT - 50)
+        type = random.choice(["slow", "clone"])
+        power_ups.append(PowerUp(x, y, type))
+
+def handle_power_up_collision(ball, paddle):
+    for power_up in power_ups:
+        if power_up.active and ball.rect.colliderect(power_up.rect):
+            power_up.active = False
+            generate_power_up()
+            if power_up.type == "slow":
+                paddle.speed = 2
+                pygame.time.set_timer(pygame.USEREVENT + 1, 5000)
+            elif power_up.type == "clone":
+                clone_ball = Ball(ball.rect.x, ball.rect.y)
+                clone_ball.speed_x = ball.speed_x
+                clone_ball.speed_y = ball.speed_y
+                return clone_ball
+    return None
+
+def reset_paddle_speed():
+    paddle1.speed = 5
+    paddle2.speed = 5
+
 game_mode = start_screen()
+clone_ball = None
+initialize_power_ups()
 
 while True:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             pygame.quit()
             sys.exit()
+        if event.type == pygame.USEREVENT + 1:
+            reset_paddle_speed()
 
     keys = pygame.key.get_pressed()
     if keys[pygame.K_w] and paddle1.rect.top > 0:
@@ -213,14 +267,27 @@ while True:
         ai_move(paddle2, ball)
 
     ball.move()
+    if clone_ball:
+        clone_ball.move()
     ball.check_collision(paddle1, paddle2)
+    if clone_ball:
+        clone_ball.check_collision(paddle1, paddle2)
     if update_score():
         game_mode = start_screen()
+        initialize_power_ups()
+
+    generate_power_up()
+    clone_ball = handle_power_up_collision(ball, paddle2) or clone_ball
 
     screen.fill(BLACK)
     paddle1.draw(screen)
     paddle2.draw(screen)
     ball.draw(screen)
+    if clone_ball:
+        clone_ball.draw(screen)
+    for power_up in power_ups:
+        if power_up.active:
+            power_up.draw(screen)
     render_score()
     pygame.display.flip()
     pygame.time.Clock().tick(60)
